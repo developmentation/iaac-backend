@@ -1,0 +1,33 @@
+{
+  "name": "iaac-backend",
+  "version": "1.0.0",
+  "main": "index.js",
+  "scripts": {
+    "test": "jest"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC",
+  "description": "",
+  "dependencies": {
+    "@google/generative-ai": "^0.24.1",
+    "cors": "^2.8.5",
+    "dotenv": "^17.2.1",
+    "express": "^5.1.0",
+    "glob": "^10.4.5",
+    "helmet": "^8.1.0",
+    "json5": "^2.2.3",
+    "mongoose": "^8.17.0",
+    "multer": "^2.0.2",
+    "pdf-poppler": "^0.2.1",
+    "pdf-text-extract": "^1.5.0",
+    "pdf2json": "^3.2.0",
+    "sharp": "^0.34.3"
+  },
+  "devDependencies": {
+    "@babel/preset-env": "^7.28.0",
+    "babel-jest": "^30.0.5",
+    "jest": "^30.0.5",
+    "supertest": "^7.1.4"
+  }
+}
