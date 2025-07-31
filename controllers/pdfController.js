@@ -1,13 +1,15 @@
 const sharp = require('sharp');
 const { GoogleGenerativeAI } = require('@google/generative-ai');
 const ParsedPdf = require('../models/parsedPdf');
-const poppler = require('pdf-poppler');
+const { Poppler } = require('node-poppler');
 const PDF2JSON = require('pdf2json');
 const fs = require('fs').promises;
 const path = require('path');
 const os = require('os');
 const { glob } = require('glob');
 const JSON5 = require('json5');
+const { v4: uuidv4 } = require('uuid'); // Add UUID package
+
 
 const genAI = new GoogleGenerativeAI(process.env.GEMINI_API_KEY);
 
@@ -83,7 +85,7 @@ async function processPageData(imagePath, pageNumber, originalFilename, pageText
       parsedResponse = JSON5.parse(geminiResponse);
     } catch (e) {
       console.warn(`Failed to parse geminiResponse as JSON for page ${pageNumber} of ${originalFilename}:`, e.message);
-      parsedResponse = geminiResponse; // Fallback to raw response
+      parsedResponse = geminiResponse;
     }
 
     const embeddingModel = genAI.getGenerativeModel({ model: 'embedding-001' });
@@ -93,7 +95,6 @@ async function processPageData(imagePath, pageNumber, originalFilename, pageText
     const embeddingOriginalTextResult = await embeddingModel.embedContent(pageText);
     const embeddingOriginalText = embeddingOriginalTextResult.embedding.values;
 
-    // Stringify parsedResponse for saving to ParsedPdf (assuming geminiResponse is a String field)
     const objectParsed = {
       originalFilename,
       pageNumber,
@@ -112,18 +113,28 @@ async function processPageData(imagePath, pageNumber, originalFilename, pageText
   }
 }
 
+
 async function processSinglePdf(pdfPath, userPrompt) {
   const tempDir = await fs.mkdtemp(path.join(os.tmpdir(), 'pdf-'));
   const originalFilename = path.basename(pdfPath);
+  const saveImages = process.env.SAVE_IMAGES === 'true'; // Check environment variable
+  const dataDir = path.join(__dirname, '..', 'data'); // Define data directory
+
+  // Create ./data directory only if saving images
+  if (saveImages) {
+    try {
+      await fs.mkdir(dataDir, { recursive: true });
+    } catch (error) {
+      console.error(`Error creating data directory: ${error.message}`);
+    }
+  }
 
   try {
-    const imageOpts = {
-      format: 'png',
-      out_dir: tempDir,
-      out_prefix: path.basename(pdfPath, path.extname(pdfPath)),
-      page: null
-    };
-    await poppler.convert(pdfPath, imageOpts);
+    const isWindows = os.platform() === 'win32';
+    const popplerBinPath = isWindows
+      ? path.join(__dirname, '..', 'node_modules', 'node-poppler', 'src', 'lib', 'win32', 'poppler-24.07.0', 'Library', 'bin')
+      : process.env.POPPLER_PATH || '/usr/bin';
+    const poppler = new Poppler(popplerBinPath);
 
     const pdfParser = new PDF2JSON();
     const pdfData = await new Promise((resolve, reject) => {
@@ -132,18 +143,49 @@ async function processSinglePdf(pdfPath, userPrompt) {
       pdfParser.loadPDF(pdfPath);
     });
 
+    const pageCount = pdfData.Pages.length;
     const pagesText = pdfData.Pages.map((page) =>
       page.Texts.map((text) => decodeURIComponent(text.R[0].T)).join(' ')
     );
 
-    const files = await fs.readdir(tempDir);
-    const imagePaths = files.filter(file => file.endsWith('.png')).map(file => path.join(tempDir, file));
-    const promises = [];
+    const imageOpts = {
+      pngFile: true,
+      firstPageToConvert: 1,
+      lastPageToConvert: pageCount,
+    };
+    const outputPrefix = path.join(tempDir, path.basename(pdfPath, path.extname(pdfPath)));
+    await poppler.pdfToCairo(pdfPath, outputPrefix, imageOpts);
 
-    for (let i = 0; i < imagePaths.length; i++) {
+    const files = await fs.readdir(tempDir);
+    const imagePaths = files
+      .filter(file => file.endsWith('.png'))
+      .sort((a, b) => {
+        const pageA = parseInt(a.match(/(\d+)\.png$/)?.[1] || 0);
+        const pageB = parseInt(b.match(/(\d+)\.png$/)?.[1] || 0);
+        return pageA - pageB;
+      })
+      .map(file => path.join(tempDir, file));
+
+    // Array to store image paths (either UUID-based or temp)
+    let finalImagePaths = imagePaths;
+
+    // Save PNGs to ./data with UUID names only if SAVE_IMAGES is true
+    if (saveImages) {
+      finalImagePaths = [];
+      for (let i = 0; i < imagePaths.length; i++) {
+        const uuid = uuidv4();
+        const newFilename = `${uuid}.png`;
+        const newPath = path.join(dataDir, newFilename);
+        await fs.copyFile(imagePaths[i], newPath); // Copy to ./data
+        finalImagePaths.push(newPath);
+      }
+    }
+
+    const promises = [];
+    for (let i = 0; i < finalImagePaths.length; i++) {
       const pageNumber = i + 1;
       const pageText = pagesText[i] || '';
-      promises.push(processPageData(imagePaths[i], pageNumber, originalFilename, pageText, userPrompt));
+      promises.push(processPageData(finalImagePaths[i], pageNumber, originalFilename, pageText, userPrompt));
     }
 
     const results = await Promise.all(promises);

@@ -3,6 +3,8 @@
   "version": "1.0.0",
   "main": "index.js",
   "scripts": {
+    "build": "npm install && sudo apt-get update && sudo apt-get install -y poppler-data poppler-utils",
+    "start": "node index.js",
     "test": "jest"
   },
   "keywords": [],
@@ -19,10 +21,10 @@
     "json5": "^2.2.3",
     "mongoose": "^8.17.0",
     "multer": "^2.0.2",
-    "pdf-poppler": "^0.2.1",
-    "pdf-text-extract": "^1.5.0",
+    "node-poppler": "^8.0.4",
     "pdf2json": "^3.2.0",
-    "sharp": "^0.34.3"
+    "sharp": "^0.34.3",
+    "uuid": "^11.1.0"
   },
   "devDependencies": {
     "@babel/preset-env": "^7.28.0",
