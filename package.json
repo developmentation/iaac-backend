@@ -3,7 +3,7 @@
   "version": "1.0.0",
   "main": "index.js",
   "scripts": {
-    "build": "npm install && sudo apt-get update && sudo apt-get install -y poppler-data poppler-utils",
+    "build": "npm install",
     "start": "node index.js",
     "test": "jest"
   },
