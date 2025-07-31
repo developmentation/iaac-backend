@@ -1,0 +1,9 @@
+services:
+  - type: web
+    name: iaac-backend
+    env: node
+    plan: free # Adjust based on your Render plan
+    branch: main # Adjust to your branch
+    buildCommand: npm run build
+    startCommand: npm start
+    preBuildCommand: apt-get update && apt-get install -y poppler-utils poppler-data libvips-dev
